@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use egui::{Color32, Context, Pos2, Rect, Rounding, Ui, Vec2};
 use rand::{rngs::StdRng, Rng};
@@ -18,8 +18,9 @@ pub struct Forest {
     // to get determinstic behavior, even with a seeded RNG. Otherwise our RNG will be generating
     // the same numbers, but we'll be visiting trees in a different order.
     trees: BTreeMap<GridPosition, TreeState>,
+    active: BTreeSet<GridPosition>,
     tick: usize,
-    burning: isize,
+    may_burn: BTreeMap<GridPosition, f64>,
     changeset: Vec<(GridPosition, TreeState)>,
 }
 impl Forest {
@@ -32,6 +33,7 @@ impl Forest {
         mut rng: StdRng,
     ) -> Self {
         let mut trees = BTreeMap::default();
+        let mut active = BTreeSet::default();
         for x in 0..grid_width {
             for y in 0..grid_height {
                 if rng.gen_bool(tree_density) {
@@ -40,13 +42,14 @@ impl Forest {
                 }
             }
         }
-        trees.insert(
-            GridPosition::new(rng.gen_range(0..grid_width), rng.gen_range(0..grid_height)),
-            TreeState::Catching,
-        );
+        let center = GridPosition::new(grid_width / 2, grid_width / 2);
+        trees.insert(center, TreeState::Catching);
+        active.insert(center);
         // Preallocate a buffer for our changesets between ticks, to avoid allocations during the
         // most intensive parts of our simulation to help keep the animation smooth.
-        let changeset = Vec::with_capacity((trees.len() / 10).max(1000));
+        let capacity = (trees.len() / 10).max(1000);
+        let changeset = Vec::with_capacity(capacity);
+
         Self {
             grid_width,
             grid_height,
@@ -54,13 +57,14 @@ impl Forest {
             burn_duration,
             rng,
             trees,
+            active,
             tick: 0,
-            burning: 1,
             changeset,
+            may_burn: BTreeMap::default(),
         }
     }
     pub fn steady_state(&self) -> bool {
-        self.burning <= 0
+        self.active.len() == 0
     }
     fn grid_params(&self, available: Vec2) -> (f32, Rect) {
         let grid_step =
@@ -98,38 +102,54 @@ impl Forest {
             };
             painter.rect_filled(tree, Rounding::default(), state.color());
         }
-
     }
     pub fn tick(&mut self) {
-        for (grid_pos, state) in self.trees.iter() {
-            match state {
-                TreeState::Uncaught => {
-                    let mut probablity_of_remaining_uncaught = 1.;
-                    for neighbor in grid_pos.neighbors() {
-                        if let Some(neighbor_state) = self.trees.get(&neighbor) && matches!(neighbor_state, TreeState::Burning(_)) {
-                            probablity_of_remaining_uncaught *= 1. - self.suceptibility;
-                        }
-                    }
-                    if !self.rng.gen_bool(probablity_of_remaining_uncaught) {
-                        self.changeset.push((*grid_pos, TreeState::Catching));
-                    }
-                }
+        // Handle caught & burning trees, calculating the probability that their neighbors will
+        // remain uncaught & transitioning to burning/burnt.
+        for grid_pos in self.active.iter() {
+            match self
+                .trees
+                .get(&grid_pos)
+                .expect("active trees should always be in the tree map")
+            {
                 TreeState::Catching => {
-                    self.changeset.push((*grid_pos, TreeState::Burning(self.tick + self.burn_duration)))
+                    self.changeset.push((
+                        *grid_pos,
+                        TreeState::Burning(self.tick + self.burn_duration),
+                    ));
                 }
                 TreeState::Burning(until) => {
+                    for neighbor in grid_pos.neighbors() {
+                        if let Some(neighbor_state) = self.trees.get(&neighbor) && matches!(neighbor_state, TreeState::Uncaught) {
+                            *self.may_burn.entry(neighbor).or_insert(1.0) *= 1. - self.suceptibility;
+                        }
+                    }
                     if self.tick >= *until {
-                        self.changeset.push((*grid_pos, TreeState::Burnt))
+                        self.changeset.push((*grid_pos, TreeState::Burnt));
                     }
                 }
-                TreeState::Burnt => (),
+                _ => (),
             }
         }
+
+        // Determine whether trees in jeopardy will or will not burn
+        for (grid_pos, probablity_of_remaining_uncaught) in self.may_burn.iter() {
+            if !self.rng.gen_bool(*probablity_of_remaining_uncaught) {
+                self.changeset.push((*grid_pos, TreeState::Catching));
+            }
+        }
+        self.may_burn.clear();
+
+        // Inserting changes
         for (grid_pos, state) in self.changeset.drain(..) {
             self.trees.insert(grid_pos, state);
             match state {
-                TreeState::Catching => self.burning += 1,
-                TreeState::Burnt => self.burning -= 1,
+                TreeState::Catching => {
+                    self.active.insert(grid_pos);
+                }
+                TreeState::Burnt => {
+                    self.active.remove(&grid_pos);
+                }
                 _ => (),
             }
         }
