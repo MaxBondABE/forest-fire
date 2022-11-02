@@ -45,7 +45,8 @@ impl Iterator for MooreNeighborhood {
             let pos_x = self.pos.x as isize;
             let pos_y = self.pos.y as isize;
             match (pos_x.checked_add(delta.0), pos_y.checked_add(delta.1)) {
-                (Some(x), Some(y)) if x > 0 && y > 0 => {
+                (Some(x), Some(y)) if x >= 0 && y >= 0 => {
+                    dbg!((x, y));
                     return Some(GridPosition::new(x as usize, y as usize))
                 }
                 _ => (),
