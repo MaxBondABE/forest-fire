@@ -101,8 +101,6 @@ impl Forest {
         let center = GridPosition::new(grid_width / 2, grid_height / 2);
         trees.insert(center, TreeState::Catching);
         active.insert(center);
-        // Preallocate a buffer for our changesets between ticks, to avoid allocations during the
-        // most intensive parts of our simulation to help keep the animation smooth.
         let capacity = (trees.len() / 10).max(1000);
         let changeset = Vec::with_capacity(capacity);
 

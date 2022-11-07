@@ -29,6 +29,7 @@ pub struct Simulation {
     perlin_scale: f64,
     seed: String,
     forest: Option<Forest>,
+    running: bool,
 }
 impl App for Simulation {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -96,7 +97,12 @@ impl App for Simulation {
             }
             ui.end_row();
 
-            if ui.button("Start simulation").clicked() {
+            let new_sim_label = match self.forest {
+                Some(_) => "Restart simulation",
+                None => "Start simulation",
+            };
+            if ui.button(new_sim_label).clicked() {
+                self.running = true;
                 let mut hasher = Sha256::new();
                 hasher.update(self.seed.clone());
                 let hash: [u8; 32] = hasher.finalize().into();
@@ -127,11 +133,28 @@ impl App for Simulation {
                     }
                 }
             }
+
+            if !self.running {
+                if let Some(forest) = self.forest.as_mut() {
+                    if !forest.steady_state() {
+                        if ui.button("Continue").clicked() {
+                            self.running = true;
+                        }
+                        if ui.button("Step").clicked() {
+                            forest.tick();
+                        }
+                    }
+                }
+            } else if let Some(forest) = self.forest.as_ref() && !forest.steady_state() {
+                if ui.button("Pause").clicked() {
+                    self.running = false;
+                }
+            }
         });
         egui::CentralPanel::default().show(ctx, |ui| {
             if let Some(forest) = self.forest.as_mut() {
                 forest.draw(ctx, ui);
-                if !forest.steady_state() {
+                if !forest.steady_state() && self.running {
                     forest.tick();
                     ctx.request_repaint();
                 }
@@ -151,6 +174,7 @@ impl Default for Simulation {
             perlin_scale: 15.,
             seed: Default::default(),
             forest: None,
+            running: false,
         }
     }
 }
