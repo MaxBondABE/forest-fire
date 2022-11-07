@@ -6,7 +6,7 @@ mod geometry;
 use std::ops::RangeInclusive;
 
 use eframe::App;
-use egui::{panel::Side, Slider};
+use egui::{panel::Side, ComboBox, Slider};
 use forest::Forest;
 use rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoroshiro128PlusPlus;
@@ -17,13 +17,16 @@ const GRID_DEFAULT: usize = 100;
 const SUCEPTIBILITY_DEFAULT: usize = 35;
 const TREE_DENSITY_DEFAULT: usize = 45;
 const PERCENTAGE_VALUES: RangeInclusive<usize> = 0..=100;
+const PERLIN_SCALE_VALUES: RangeInclusive<f64> = 0.0..=50.0;
 
 pub struct Simulation {
     grid_width: usize,
     grid_height: usize,
     burn_duration: usize,
     suceptibility_pct: usize,
-    tree_density_pct: usize,
+    placement: TreePlacement,
+    uniform_density_pct: usize,
+    perlin_scale: f64,
     seed: String,
     forest: Option<Forest>,
 }
@@ -50,10 +53,37 @@ impl App for Simulation {
                 ui.add(Slider::new(&mut self.suceptibility_pct, PERCENTAGE_VALUES));
             });
             ui.end_row();
-            ui.horizontal(|ui| {
-                ui.label("Tree Density (%)");
-                ui.add(Slider::new(&mut self.tree_density_pct, PERCENTAGE_VALUES));
-            });
+            ComboBox::from_label("Tree placement")
+                .selected_text(self.placement.label())
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(
+                        &mut self.placement,
+                        TreePlacement::Uniform,
+                        TreePlacement::Uniform.label(),
+                    );
+                    ui.selectable_value(
+                        &mut self.placement,
+                        TreePlacement::Perlin,
+                        TreePlacement::Perlin.label(),
+                    );
+                });
+            match self.placement {
+                TreePlacement::Uniform => {
+                    ui.horizontal(|ui| {
+                        ui.label("Tree Density (%)");
+                        ui.add(Slider::new(
+                            &mut self.uniform_density_pct,
+                            PERCENTAGE_VALUES,
+                        ));
+                    });
+                }
+                TreePlacement::Perlin => {
+                    ui.horizontal(|ui| {
+                        ui.label("Scale");
+                        ui.add(Slider::new(&mut self.perlin_scale, PERLIN_SCALE_VALUES));
+                    });
+                }
+            };
             ui.end_row();
             ui.horizontal(|ui| {
                 ui.label("Seed");
@@ -73,15 +103,29 @@ impl App for Simulation {
                 let seed: [u8; 8] = hash[..8].try_into().unwrap();
                 let rng = Xoroshiro128PlusPlus::seed_from_u64(u64::from_le_bytes(seed));
                 let suceptibility = self.suceptibility_pct as f64 / 100.;
-                let tree_density = self.tree_density_pct as f64 / 100.;
-                self.forest = Some(Forest::new(
-                    self.grid_width,
-                    self.grid_height,
-                    suceptibility,
-                    self.burn_duration,
-                    tree_density,
-                    rng,
-                ));
+                match self.placement {
+                    TreePlacement::Uniform => {
+                        let tree_density = self.uniform_density_pct as f64 / 100.;
+                        self.forest = Some(Forest::uniform(
+                            self.grid_width,
+                            self.grid_height,
+                            suceptibility,
+                            self.burn_duration,
+                            tree_density,
+                            rng,
+                        ))
+                    }
+                    TreePlacement::Perlin => {
+                        self.forest = Some(Forest::perlin(
+                            self.grid_width,
+                            self.grid_height,
+                            suceptibility,
+                            self.burn_duration,
+                            self.perlin_scale,
+                            rng,
+                        ))
+                    }
+                }
             }
         });
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -102,9 +146,26 @@ impl Default for Simulation {
             grid_height: GRID_DEFAULT,
             burn_duration: 5,
             suceptibility_pct: SUCEPTIBILITY_DEFAULT,
-            tree_density_pct: TREE_DENSITY_DEFAULT,
+            placement: TreePlacement::default(),
+            uniform_density_pct: TREE_DENSITY_DEFAULT,
+            perlin_scale: 15.,
             seed: Default::default(),
             forest: None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
+enum TreePlacement {
+    #[default]
+    Uniform,
+    Perlin,
+}
+impl TreePlacement {
+    fn label(&self) -> &'static str {
+        match self {
+            TreePlacement::Uniform => "Uniform",
+            TreePlacement::Perlin => "Perlin noise",
         }
     }
 }

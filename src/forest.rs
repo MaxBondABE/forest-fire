@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use egui::{Color32, Context, Pos2, Rect, Rounding, Ui, Vec2};
+use noise::{NoiseFn, Perlin};
 use rand::Rng;
 use rand_xoshiro::Xoroshiro128PlusPlus;
 
@@ -10,22 +11,30 @@ const DARK_BROWN: Color32 = Color32::from_rgb(0x36, 0x24, 0x19);
 
 #[derive(Clone)]
 pub struct Forest {
+    // Parameters
     grid_width: usize,
     grid_height: usize,
     suceptibility: f64,
     burn_duration: usize,
-    rng: Xoroshiro128PlusPlus,
+
+    // Tree state
     // NB: Rust's HashMap is nondeterministic (as a DoS mitigation). We MUST use an ordered map
     // to get determinstic behavior, even with a seeded RNG. Otherwise our RNG will be generating
     // the same numbers, but we'll be visiting trees in a different order.
     trees: BTreeMap<GridPosition, TreeState>,
     active: BTreeSet<GridPosition>,
     tick: usize,
+
+    // Tick state
+    // Used as queues during ticks. Drained & reused between ticks to avoid allocations & help keep
+    // animations smooth.
     may_burn: BTreeMap<GridPosition, f64>,
     changeset: Vec<(GridPosition, TreeState)>,
+
+    rng: Xoroshiro128PlusPlus,
 }
 impl Forest {
-    pub fn new(
+    pub fn uniform(
         grid_width: usize,
         grid_height: usize,
         suceptibility: f64,
@@ -38,6 +47,52 @@ impl Forest {
         for x in 0..grid_width {
             for y in 0..grid_height {
                 if rng.gen_bool(tree_density) {
+                    let grid_pos = GridPosition::new(x, y);
+                    trees.insert(grid_pos, Default::default());
+                }
+            }
+        }
+        let center = GridPosition::new(grid_width / 2, grid_height / 2);
+        trees.insert(center, TreeState::Catching);
+        active.insert(center);
+        let capacity = (trees.len() / 10).max(1000);
+        let changeset = Vec::with_capacity(capacity);
+
+        Self {
+            grid_width,
+            grid_height,
+            suceptibility,
+            burn_duration,
+            rng,
+            trees,
+            active,
+            tick: 0,
+            changeset,
+            may_burn: BTreeMap::default(),
+        }
+    }
+    pub fn perlin(
+        grid_width: usize,
+        grid_height: usize,
+        suceptibility: f64,
+        burn_duration: usize,
+        scale: f64,
+        mut rng: Xoroshiro128PlusPlus,
+    ) -> Self {
+        let mut trees = BTreeMap::default();
+        let mut active = BTreeSet::default();
+        let noise = Perlin::new(rng.gen());
+        // Perlin noise will always produce return 0s if you sample it at integer coordinates, so we
+        // need to translate our grid to get good output
+        let translation = (rng.gen_range(0.1..=1.0), rng.gen_range(0.1..=1.0));
+        for x in 0..grid_width {
+            for y in 0..grid_height {
+                // Perlin is between [-1,1]; normalize to [0, 1]
+                let p = (noise.get([
+                    (x as f64 + translation.0) / grid_width as f64 * scale,
+                    (y as f64 + translation.1) / grid_height as f64 * scale,
+                ]) + 1.) / 2.;
+                if rng.gen_bool(p) {
                     let grid_pos = GridPosition::new(x, y);
                     trees.insert(grid_pos, Default::default());
                 }
