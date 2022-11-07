@@ -42,7 +42,7 @@ impl Forest {
                 }
             }
         }
-        let center = GridPosition::new(grid_width / 2, grid_width / 2);
+        let center = GridPosition::new(grid_width / 2, grid_height / 2);
         trees.insert(center, TreeState::Catching);
         active.insert(center);
         // Preallocate a buffer for our changesets between ticks, to avoid allocations during the
@@ -79,7 +79,7 @@ impl Forest {
 
         (grid_step, Rect { min, max })
     }
-    pub fn draw(&mut self, ctx: &Context, ui: &Ui) {
+    pub fn draw(&mut self, _ctx: &Context, ui: &Ui) {
         let (grid_step, grid_rect) = self.grid_params(ui.available_size());
         let painter = ui.painter();
 
