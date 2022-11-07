@@ -1,7 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use egui::{Color32, Context, Pos2, Rect, Rounding, Ui, Vec2};
-use rand::{rngs::StdRng, Rng};
+use rand::Rng;
+use rand_xoshiro::Xoroshiro128PlusPlus;
 
 use crate::geometry::GridPosition;
 
@@ -13,7 +14,7 @@ pub struct Forest {
     grid_height: usize,
     suceptibility: f64,
     burn_duration: usize,
-    rng: StdRng,
+    rng: Xoroshiro128PlusPlus,
     // NB: Rust's HashMap is nondeterministic (as a DoS mitigation). We MUST use an ordered map
     // to get determinstic behavior, even with a seeded RNG. Otherwise our RNG will be generating
     // the same numbers, but we'll be visiting trees in a different order.
@@ -30,7 +31,7 @@ impl Forest {
         suceptibility: f64,
         burn_duration: usize,
         tree_density: f64,
-        mut rng: StdRng,
+        mut rng: Xoroshiro128PlusPlus,
     ) -> Self {
         let mut trees = BTreeMap::default();
         let mut active = BTreeSet::default();

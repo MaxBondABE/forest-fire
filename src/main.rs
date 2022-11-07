@@ -8,7 +8,8 @@ use std::ops::RangeInclusive;
 use eframe::App;
 use egui::{panel::Side, Slider};
 use forest::Forest;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng};
+use rand_xoshiro::Xoroshiro128PlusPlus;
 use sha2::{Digest, Sha256};
 
 const GRID_VALUES: RangeInclusive<usize> = 1..=1000;
@@ -68,7 +69,9 @@ impl App for Simulation {
             if ui.button("Start simulation").clicked() {
                 let mut hasher = Sha256::new();
                 hasher.update(self.seed.clone());
-                let rng = StdRng::from_seed(hasher.finalize().into());
+                let hash: [u8; 32] = hasher.finalize().into();
+                let seed: [u8; 8] = hash[..8].try_into().unwrap();
+                let rng = Xoroshiro128PlusPlus::seed_from_u64(u64::from_le_bytes(seed));
                 let suceptibility = self.suceptibility_pct as f64 / 100.;
                 let tree_density = self.tree_density_pct as f64 / 100.;
                 self.forest = Some(Forest::new(
