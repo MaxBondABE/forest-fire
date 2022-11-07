@@ -1,25 +1,23 @@
-<!DOCTYPE html>
-<html>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<!DOCTYPE html><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 
 <!-- Disable zooming: -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
-<head>
+
     <!-- change this to your project name -->
     <title>Forest Fire Simulation</title>
 
     <!-- config for our rust wasm binary. go to https://trunkrs.dev/assets/#rust for more customization -->
-    <link data-trunk rel="rust" data-wasm-opt="2" />
+    <script type="module">import init from '/forest-fire/forest_fire-8299377050a5bf42.js';init('/forest-fire/forest_fire-8299377050a5bf42_bg.wasm');</script>
     <!-- this is the base url relative to which other urls will be constructed. trunk will insert this from the public-url option -->
-    <base data-trunk-public-url />
+    <base href="/forest-fire/">
 
-    <link data-trunk rel="copy-file" href="assets/sw.js" />
-    <link data-trunk rel="copy-file" href="assets/manifest.json" />
-    <link data-trunk rel="copy-file" href="assets/icon-1024.png" />
-    <link data-trunk rel="copy-file" href="assets/icon-256.png" />
-    <link data-trunk rel="copy-file" href="assets/icon_ios_touch_192.png" />
-    <link data-trunk rel="copy-file" href="assets/maskable_icon_x512.png" />
+    
+    
+    
+    
+    
+    
 
 
     <link rel="manifest" href="manifest.json">
@@ -113,7 +111,9 @@
         }
 
     </style>
-</head>
+
+<link rel="preload" href="/forest-fire/forest_fire-8299377050a5bf42_bg.wasm" as="fetch" type="application/wasm" crossorigin="">
+<link rel="modulepreload" href="/forest-fire/forest_fire-8299377050a5bf42.js"></head>
 
 <body>
     <!-- The WASM code will resize the canvas dynamically -->
@@ -130,8 +130,9 @@
             });
         }
     </script>
-</body>
 
-</html>
 
-<!-- Powered by egui: https://github.com/emilk/egui/ -->
+
+
+
+</body></html><!-- Powered by egui: https://github.com/emilk/egui/ -->
